@@ -1,1 +1,0 @@
-aqui vai os docs usados e tambem referencias e parte escrita, o readme deve conter um overview do projeto, aqui vai as informações detalhadas 

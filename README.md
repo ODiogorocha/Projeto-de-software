@@ -91,7 +91,6 @@ Serão utilizados:
 
   * Pandas
   * Matplotlib / Seaborn / Plotly
-* Jupyter Notebook
 * Git e GitHub
 
 ---
@@ -144,6 +143,19 @@ cd Projeto-de-software
 
 # Instalar dependências
 pip install -r requirements.txt
+
+#criar uma branch
+git checkout -b feat/nome-da-branch
+
+#mudar de branch 
+git checkout nome-da-branch
+
+#commit 
+git add nome-dos-arquivos
+
+git commit -m "o que foi mudado" #colocar feat para criacao e fix para correcao
+
+git push 
 
 ```
 
