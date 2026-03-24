@@ -2,7 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Caminho do dataset (ajuste conforme necessário)
-ARQUIVO = "srag.csv"
+ARQUIVO = "/home/diogo/Documentos/codigos/Projeto-de-software/docs/INFLUD19-26-06-2025.csv"
 
 def carregar_dados(caminho):
     print("Carregando dados...")

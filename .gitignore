@@ -1,0 +1,63 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Ambientes virtuais
+venv/
+.env/
+.envrc
+.venv/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Arquivos de configuração do Jupyter
+.jupyter/
+
+# Arquivos de dados (evita subir datasets grandes)
+*.csv
+*.xlsx
+*.json
+*.parquet
+
+# Arquivos gerados
+*.log
+*.tmp
+
+# Gráficos e imagens geradas
+*.png
+*.jpg
+*.jpeg
+*.svg
+
+# Arquivos de sistema
+.DS_Store
+Thumbs.db
+
+# VSCode
+.vscode/
+
+# PyCharm
+.idea/
+
+# Arquivos de build
+build/
+dist/
+*.egg-info/
+
+# Cache de bibliotecas
+.cache/
+
+# Arquivos de teste
+.coverage
+htmlcov/
+
+# Streamlit (caso use depois)
+.streamlit/
+
+# Geopandas / shapefiles
+*.shp
+*.shx
+*.dbf
+*.cpg
