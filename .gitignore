@@ -16,10 +16,10 @@ venv/
 .jupyter/
 
 # Arquivos de dados (evita subir datasets grandes)
-*.csv
-*.xlsx
-*.json
-*.parquet
+#*.csv
+#*.xlsx
+#*.json
+#*.parquet
 
 # Arquivos gerados
 *.log

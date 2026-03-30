@@ -144,6 +144,9 @@ cd Projeto-de-software
 # Instalar dependências
 pip install -r requirements.txt
 
+#para rodar
+streamlit run app.py
+
 #criar uma branch
 git checkout -b feat/nome-da-branch
 

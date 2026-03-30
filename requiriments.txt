@@ -1,6 +1,6 @@
 pandas
 matplotlib
-seaborn
-plotly
-jupyter
+scikit-learn
+streamlit
 geopandas
+plotly
