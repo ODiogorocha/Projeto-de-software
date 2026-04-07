@@ -3,7 +3,8 @@ import pandas as pd
 import plotly.express as px
 import geopandas as gpd
 
-from data_loader import carregar_dados, tratar_dados
+# 1. Adicione as novas funções na importação aqui!
+from data_loader import carregar_dados, tratar_dados, carregar_coordenadas, mesclar_coordenadas
 from model import treinar_modelo
 
 # ========================
@@ -11,15 +12,19 @@ from model import treinar_modelo
 # ========================
 
 st.set_page_config(layout="wide", page_title="Dashboard SRAG")
-
 st.title("📊 Dashboard SRAG - Análise Completa")
 
 # ========================
 # CAMINHOS
 # ========================
 
-ARQUIVO = "/home/diogo/Documentos/codigos/Projeto-de-software/docs/database/INFLUD19-23-03-2026.csv"
-MAPA = "brasil_estados.geojson"
+# O seu arquivo original
+ARQUIVO = r"C:\Users\gabri\Projeto-de-software\docs\database\INFLUD19-23-03-2026.csv"
+MAPA = r"src/brasil_estados.geojson"
+
+# 2. ADICIONE O CAMINHO DO SEU CSV DE MUNICÍPIOS AQUI:
+# (Troque pelo caminho real de onde você salvou o arquivo no seu computador)
+ARQUIVO_CIDADES = r"C:\Users\gabri\Projeto-de-software\docs\database\municipios.csv" 
 
 # ========================
 # DADOS
@@ -27,8 +32,17 @@ MAPA = "brasil_estados.geojson"
 
 @st.cache_data
 def load_data():
-    df = tratar_dados(carregar_dados(ARQUIVO))
-    return df
+    # Carrega e trata os dados principais
+    df_bruto = carregar_dados(ARQUIVO)
+    df_tratado = tratar_dados(df_bruto)
+    
+    # Carrega o CSV de coordenadas usando o caminho que você definiu acima
+    df_coords = carregar_coordenadas(ARQUIVO_CIDADES)
+    
+    # Mescla os dois DataFrames
+    df_final = mesclar_coordenadas(df_tratado, df_coords)
+    
+    return df_final
 
 df_total = load_data()
 df = df_total.copy()
@@ -140,11 +154,11 @@ with tab1:
 # ========================
 
 with tab2:
-    st.subheader("🔥 Heatmap + Cidade")
+    st.subheader("🔥 Heatmap e Distribuição Geográfica")
 
     geo = gpd.read_file(MAPA)
 
-    # Filtro estado
+    # 1. Filtro de Estado
     estados_disponiveis = sorted(df["SG_UF"].dropna().unique())
     estado_sel = st.selectbox("Estado", ["Todos"] + estados_disponiveis)
 
@@ -153,7 +167,7 @@ with tab2:
     if estado_sel != "Todos":
         df_map = df_map[df_map["SG_UF"] == estado_sel]
 
-    # Filtro cidade (CORRETO)
+    # 2. Filtro de Cidade
     if "ID_MN_RESI" in df_map.columns:
         cidades_disponiveis = sorted(df_map["ID_MN_RESI"].dropna().unique())
         cidade_sel = st.selectbox("Cidade", ["Todas"] + cidades_disponiveis)
@@ -161,33 +175,70 @@ with tab2:
         if cidade_sel != "Todas":
             df_map = df_map[df_map["ID_MN_RESI"] == cidade_sel]
 
-    # Heatmap por estado
-    casos_estado = df_map["SG_UF"].value_counts().reset_index()
-    casos_estado.columns = ["SG_UF", "casos"]
+    # 3. Lógica do Gráfico
+    if cidade_sel == "Todas":
+        # MAPA POR ESTADO (Visão Geral)
+        casos_estado = df_map["SG_UF"].value_counts().reset_index()
+        casos_estado.columns = ["SG_UF", "casos"]
 
-    geo_estado = geo.merge(casos_estado, left_on="sigla", right_on="SG_UF", how="left")
+        geo_estado = geo.merge(casos_estado, left_on="sigla", right_on="SG_UF", how="left")
+        geo_estado = geo_estado.to_crs(epsg=4326)
+        
+        # Pega o centro do estado para o mapa de calor
+        geo_estado["lat"] = geo_estado.geometry.centroid.y
+        geo_estado["lon"] = geo_estado.geometry.centroid.x
 
-    geo_estado = geo_estado.to_crs(epsg=4326)
+        fig = px.density_mapbox(
+            geo_estado,
+            lat="lat",
+            lon="lon",
+            z="casos",
+            radius=40,
+            zoom=3.5, # Ajuste fino do zoom para caber o Brasil
+            center={"lat": -15.0, "lon": -53.0}, # Coordenadas centrais do Brasil!
+            mapbox_style="carto-positron",
+            title="Mapa de Calor por Estado"
+        )
+        # Deixa o mapa mais alto e tira as margens brancas mortas
+        fig.update_layout(height=600, margin={"r":0,"t":40,"l":0,"b":0})
+        st.plotly_chart(fig, use_container_width=True)
 
-    geo_estado["lat"] = geo_estado.geometry.centroid.y
-    geo_estado["lon"] = geo_estado.geometry.centroid.x
+    else:
+        # MAPA POR CIDADE (Visão Específica com Lat/Lon reais)
+        st.info(f"📍 Mostrando dados focados em: {cidade_sel}")
+            
+        
+        
+        
+        # Verifica se as colunas de coordenada existem e não estão vazias para essa cidade
+        if "latitude" in df_map.columns and "longitude" in df_map.columns and pd.notna(df_map["latitude"].iloc[0]):
+            
+            # Conta os casos nessa localidade para definir a intensidade da "mancha" de calor
+            casos_cidade = df_map.groupby(["ID_MN_RESI", "latitude", "longitude"]).size().reset_index(name="casos")
+            
+            # Calcula o meio exato da cidade para a câmera focar nela!
+            centro_lat = casos_cidade["latitude"].mean()
+            centro_lon = casos_cidade["longitude"].mean()
+            
+            fig = px.density_mapbox(
+                casos_cidade,
+                lat="latitude",
+                lon="longitude",
+                z="casos",
+                radius=50,
+                zoom=10, # Zoom bem próximo (nível de ruas/bairros)
+                center={"lat": centro_lat, "lon": centro_lon}, # Foca na cidade!
+                mapbox_style="carto-positron",
+                title=f"Densidade de Casos - {cidade_sel}"
+            )
+            # Mesma formatação de altura e bordas
+            fig.update_layout(height=600, margin={"r":0,"t":40,"l":0,"b":0})
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.warning(f"⚠️ Não foi possível encontrar as coordenadas para a cidade de {cidade_sel}. Verifique se o código IBGE dela existe no arquivo municipios.csv.")
 
-    fig = px.density_mapbox(
-        geo_estado,
-        lat="lat",
-        lon="lon",
-        z="casos",
-        radius=30,
-        zoom=3,
-        mapbox_style="open-street-map",
-        title="Mapa de Calor por Estado"
-    )
-
-    st.plotly_chart(fig, use_container_width=True)
-
-    # Gráfico por cidade
-    st.subheader("📊 Casos por Cidade")
-
+    # Gráfico de barras de brinde embaixo do mapa
+    st.subheader("📊 Top Casos por Cidade")
     if "ID_MN_RESI" in df_map.columns and len(df_map) > 0:
         df_city = df_map["ID_MN_RESI"].value_counts().reset_index()
         df_city.columns = ["Cidade", "casos"]
@@ -196,12 +247,11 @@ with tab2:
             df_city.head(20),
             x="Cidade",
             y="casos",
-            title="Top Cidades com Mais Casos"
+            title="Cidades com Mais Casos Filtrados",
+            color="casos",
+            color_continuous_scale="Reds"
         )
-
         st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.warning("Sem dados de cidade disponíveis.")
 
 # ========================
 # 🗺️ ABA 3 - MAPA COROPLÉTICO
