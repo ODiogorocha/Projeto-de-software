@@ -19,12 +19,12 @@ st.title("📊 Dashboard SRAG - Análise Completa")
 # ========================
 
 # O seu arquivo original
-ARQUIVO = r"C:\Users\gabri\Projeto-de-software\docs\database\INFLUD19-23-03-2026.csv"
-MAPA = r"src/brasil_estados.geojson"
+ARQUIVO = r"/home/diogo/Documentos/codigos/Projeto-de-software/docs/database/INFLUD19-26-06-2025.csv"
+MAPA = r"/home/diogo/Documentos/codigos/Projeto-de-software/src/brasil_estados.geojson"
 
 # 2. ADICIONE O CAMINHO DO SEU CSV DE MUNICÍPIOS AQUI:
 # (Troque pelo caminho real de onde você salvou o arquivo no seu computador)
-ARQUIVO_CIDADES = r"C:\Users\gabri\Projeto-de-software\docs\database\municipios.csv" 
+ARQUIVO_CIDADES = r"/home/diogo/Documentos/codigos/Projeto-de-software/docs/database/municipios.csv" 
 
 # ========================
 # DADOS
@@ -118,7 +118,7 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
 ])
 
 # ========================
-# 📊 ABA 1 - GERAL
+# ABA 1 - GERAL
 # ========================
 
 with tab1:
@@ -150,11 +150,11 @@ with tab1:
         st.plotly_chart(fig, use_container_width=True)
 
 # ========================
-# 🔥 ABA 2 - HEATMAP + CIDADES
+#  ABA 2 - HEATMAP + CIDADES
 # ========================
 
 with tab2:
-    st.subheader("🔥 Heatmap e Distribuição Geográfica")
+    st.subheader(" Heatmap e Distribuição Geográfica")
 
     geo = gpd.read_file(MAPA)
 
@@ -205,7 +205,7 @@ with tab2:
 
     else:
         # MAPA POR CIDADE (Visão Específica com Lat/Lon reais)
-        st.info(f"📍 Mostrando dados focados em: {cidade_sel}")
+        st.info(f" Mostrando dados focados em: {cidade_sel}")
             
         
         
@@ -235,7 +235,7 @@ with tab2:
             fig.update_layout(height=600, margin={"r":0,"t":40,"l":0,"b":0})
             st.plotly_chart(fig, use_container_width=True)
         else:
-            st.warning(f"⚠️ Não foi possível encontrar as coordenadas para a cidade de {cidade_sel}. Verifique se o código IBGE dela existe no arquivo municipios.csv.")
+            st.warning(f" Não foi possível encontrar as coordenadas para a cidade de {cidade_sel}. Verifique se o código IBGE dela existe no arquivo municipios.csv.")
 
     # Gráfico de barras de brinde embaixo do mapa
     st.subheader("📊 Top Casos por Cidade")
@@ -254,7 +254,7 @@ with tab2:
         st.plotly_chart(fig, use_container_width=True)
 
 # ========================
-# 🗺️ ABA 3 - MAPA COROPLÉTICO
+#  ABA 3 - MAPA COROPLÉTICO
 # ========================
 
 with tab3:
@@ -282,11 +282,11 @@ with tab3:
     st.plotly_chart(fig, use_container_width=True)
 
 # ========================
-# 🌳 ABA 4 - ÁRVORE
+#  ABA 4 - ÁRVORE
 # ========================
 
 with tab4:
-    st.subheader("🌳 Árvore Hierárquica")
+    st.subheader(" Árvore Hierárquica")
 
     df_tree = df.copy()
 
@@ -309,7 +309,7 @@ with tab4:
         st.plotly_chart(fig, use_container_width=True)
 
 # ========================
-# 📈 ABA 5 - TEMPORAL
+#  ABA 5 - TEMPORAL
 # ========================
 
 with tab5:
@@ -332,7 +332,7 @@ with tab5:
         st.plotly_chart(fig, use_container_width=True)
 
 # ========================
-# 📊 ABA 6 - DISTRIBUIÇÕES
+#  ABA 6 - DISTRIBUIÇÕES
 # ========================
 
 with tab6:
