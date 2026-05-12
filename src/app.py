@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import geopandas as gpd
 
+
 # 1. Adicione as novas funções na importação aqui!
 from data_loader import carregar_dados, tratar_dados, carregar_coordenadas, mesclar_coordenadas
 from model import treinar_modelo
@@ -10,6 +11,14 @@ from model import treinar_modelo
 # ========================
 # CONFIGURAÇÃO
 # ========================
+from styles import carregar_estilos
+st.set_page_config(layout="wide",
+    page_title="Dashboard SRAG",
+    page_icon="🦠")
+st.markdown(
+    carregar_estilos(),
+    unsafe_allow_html=True
+)
 
 st.set_page_config(layout="wide", page_title="Dashboard SRAG")
 st.title("📊 Dashboard SRAG - Análise Completa")
@@ -44,6 +53,15 @@ def load_data():
 
 df_total = load_data()
 df = df_total.copy()
+
+@st.cache_data
+def load_mapa():
+    return gpd.read_file(MAPA)
+
+# Executando as funções e salvando nas variáveis globais do app
+df_total = load_data()
+df = df_total.copy()
+geo = load_mapa()
 
 # ========================
 # DOENÇAS
@@ -116,7 +134,7 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
 ])
 
 # ========================
-# 📊 ABA 1 - GERAL
+# 📊 ABA 1 - GERAL (Refatorada)
 # ========================
 
 with tab1:
@@ -130,8 +148,24 @@ with tab1:
             df_pie,
             names="DOENCA",
             values="count",
-            hole=0.4,
-            title="Distribuição por Doença"
+            hole=0.5, # Aumentado para um visual "Donut" mais moderno
+            title="<b>Distribuição por Doença</b>",
+            color_discrete_sequence=px.colors.qualitative.Prism # Paleta mais vibrante
+        )
+        
+        # Ajustes de Interatividade e Estilo
+        fig.update_traces(
+            textposition='inside', 
+            textinfo='percent+label',
+            marker=dict(line=dict(color='#1e293b', width=2)) # Borda para separar fatias
+        )
+        
+        fig.update_layout(
+            paper_bgcolor='rgba(0,0,0,0)', # Fundo transparente
+            plot_bgcolor='rgba(0,0,0,0)',
+            font_color="white",
+            showlegend=False, # Labels já estão no gráfico, economiza espaço
+            margin=dict(t=50, b=20, l=20, r=20)
         )
         st.plotly_chart(fig, use_container_width=True)
 
@@ -143,8 +177,22 @@ with tab1:
             df_bar,
             x="SG_UF",
             y="count",
-            title="Casos por Estado"
+            title="<b>Casos por Estado</b>",
+            color="count", # Cor gradiente baseada no volume
+            color_continuous_scale="Blues",
+            labels={"count": "Casos", "SG_UF": "UF"}
         )
+        
+        fig.update_layout(
+            paper_bgcolor='rgba(0,0,0,0)', # Fundo transparente
+            plot_bgcolor='rgba(0,0,0,0)',
+            font_color="white",
+            xaxis={'categoryorder':'total descending'}, # Garante a ordem do maior para o menor
+            coloraxis_showscale=False, # Remove a barra de cores lateral para limpar o visual
+            margin=dict(t=50, b=20, l=20, r=20)
+        )
+        
+        fig.update_traces(marker_line_color='rgba(0,0,0,0)') # Remove bordas das barras
         st.plotly_chart(fig, use_container_width=True)
 
 # ========================
@@ -153,8 +201,6 @@ with tab1:
 
 with tab2:
     st.subheader("🔥 Heatmap e Distribuição Geográfica")
-
-    geo = gpd.read_file(MAPA)
 
     # ========================
     # FILTRO DE ESTADO
@@ -191,67 +237,62 @@ with tab2:
 
     if cidade_sel == "Todas":
 
-        # Casos por município
-        df_municipio = (
-            df_map.groupby(["SG_UF", "ID_MN_RESI", "POPULACAO"])
-            .size()
-            .reset_index(name="casos")
-        )
+        st.info("📍 Mostrando densidade térmica por municípios.")
 
-        # Casos por 100 mil habitantes
-        df_municipio["casos_100k"] = (
-            df_municipio["casos"] /
-            df_municipio["POPULACAO"]
-        ) * 100000
+        # Verifica se as colunas de coordenadas existem no DataFrame
+        if "latitude" in df_map.columns and "longitude" in df_map.columns:
 
-        # Agrega para estado
-        casos_estado = (
-            df_municipio.groupby("SG_UF")
-            .agg({
-                "casos": "sum",
-                "POPULACAO": "sum"
-            })
-            .reset_index()
-        )
+            # Agrupa os casos por cidade usando as coordenadas exatas
+            casos_brasil_cidades = (
+                df_map.groupby([
+                    "ID_MN_RESI",
+                    "latitude",
+                    "longitude",
+                    "POPULACAO"
+                ])
+                .size()
+                .reset_index(name="casos")
+            )
 
-        # Taxa estadual
-        casos_estado["casos_100k"] = (
-            casos_estado["casos"] /
-            casos_estado["POPULACAO"]
-        ) * 100000
+            # Calcula a taxa por 100 mil habitantes para padronizar
+            casos_brasil_cidades["casos_100k"] = (
+                casos_brasil_cidades["casos"] /
+                casos_brasil_cidades["POPULACAO"]
+            ) * 100000
 
-        # Junta com geojson
-        geo_estado = geo.merge(
-            casos_estado,
-            left_on="sigla",
-            right_on="SG_UF",
-            how="left"
-        )
+            # Cria o Heatmap
+            fig = px.density_mapbox(
+                casos_brasil_cidades,
+                lat="latitude",
+                lon="longitude",
+                z="casos_100k",
+                radius=15, # Raio menor (15-20) evita que o Brasil vire um borrão gigante
+                zoom=3.5,
+                center={"lat": -15.5, "lon": -55.0}, # Centro do Brasil
+                mapbox_style="carto-positron",
+                title="<b>Heatmap: Casos por 100 mil hab. (Por Cidade)</b>",
+                hover_name="ID_MN_RESI", # O nome da cidade aparece ao passar o mouse!
+                hover_data={"latitude": False, "longitude": False, "casos_100k": ':.2f'}
+            )
 
-        geo_estado = geo_estado.to_crs(epsg=4326)
+            # Ajustes de layout para ficar com a mesma altura elegante do Mapa Coroplético
+            fig.update_layout(
+                height=750,
+                margin={"r":0, "t":50, "l":0, "b":0},
+                coloraxis_colorbar=dict(
+                    title="Intensidade",
+                    thicknessmode="pixels", thickness=15,
+                    lenmode="pixels", len=300,
+                    yanchor="middle", y=0.5
+                )
+            )
 
-        # Centro dos estados
-        geo_estado["lat"] = geo_estado.geometry.centroid.y
-        geo_estado["lon"] = geo_estado.geometry.centroid.x
+            st.plotly_chart(fig, use_container_width=True)
+            
+        else:
+            st.warning("⚠️ As colunas 'latitude' e 'longitude' não foram encontradas. Verifique o cruzamento de coordenadas.")
 
-        fig = px.density_mapbox(
-            geo_estado,
-            lat="lat",
-            lon="lon",
-            z="casos_100k",
-            radius=40,
-            zoom=3.5,
-            center={"lat": -15.0, "lon": -53.0},
-            mapbox_style="carto-positron",
-            title="Casos por 100 mil Habitantes por Estado"
-        )
-
-        fig.update_layout(
-            height=600,
-            margin={"r":0, "t":40, "l":0, "b":0}
-        )
-
-        st.plotly_chart(fig, use_container_width=True)
+      
 
     # ========================
     # MAPA POR CIDADE
@@ -372,7 +413,6 @@ with tab2:
 
 with tab3:
     # 1. Preparação dos dados (mantive sua lógica)
-    geo = gpd.read_file(MAPA)
     casos_estado = df["SG_UF"].value_counts().reset_index()
     casos_estado.columns = ["SG_UF", "casos"]
 
