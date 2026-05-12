@@ -2,7 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 
-ARQUIVO = "/home/diogo/Documentos/codigos/Projeto-de-software/docs/database/INFLUD19-26-06-2025.csv"
+ARQUIVO = "/home/gabriel/Projetos/Projeto-de-software/docs/database/INFLUD19-26-06-2025.csv"
 
 
 # ========================
