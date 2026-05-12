@@ -18,13 +18,11 @@ st.title("📊 Dashboard SRAG - Análise Completa")
 # CAMINHOS
 # ========================
 
-# O seu arquivo original
-ARQUIVO = r"C:\Users\gabri\Projeto-de-software\docs\database\INFLUD19-23-03-2026.csv"
-MAPA = r"src/brasil_estados.geojson"
+ARQUIVO = r"/home/gabriel/Projetos/Projeto-de-software/docs/database/INFLUD19-23-03-2026.csv"
+MAPA = r"/home/gabriel/Projetos/Projeto-de-software/src/brasil_estados.geojson"
 
 # 2. ADICIONE O CAMINHO DO SEU CSV DE MUNICÍPIOS AQUI:
-# (Troque pelo caminho real de onde você salvou o arquivo no seu computador)
-ARQUIVO_CIDADES = r"C:\Users\gabri\Projeto-de-software\docs\database\municipios.csv" 
+ARQUIVO_CIDADES = r"/home/gabriel/Projetos/Projeto-de-software/docs/database/municipios.csv" 
 
 # ========================
 # DADOS
@@ -158,7 +156,10 @@ with tab2:
 
     geo = gpd.read_file(MAPA)
 
-    # 1. Filtro de Estado
+    # ========================
+    # FILTRO DE ESTADO
+    # ========================
+
     estados_disponiveis = sorted(df["SG_UF"].dropna().unique())
     estado_sel = st.selectbox("Estado", ["Todos"] + estados_disponiveis)
 
@@ -167,24 +168,69 @@ with tab2:
     if estado_sel != "Todos":
         df_map = df_map[df_map["SG_UF"] == estado_sel]
 
-    # 2. Filtro de Cidade
+    # ========================
+    # FILTRO DE CIDADE
+    # ========================
+
+    cidade_sel = "Todas"
+
     if "ID_MN_RESI" in df_map.columns:
         cidades_disponiveis = sorted(df_map["ID_MN_RESI"].dropna().unique())
-        cidade_sel = st.selectbox("Cidade", ["Todas"] + cidades_disponiveis)
+
+        cidade_sel = st.selectbox(
+            "Cidade",
+            ["Todas"] + cidades_disponiveis
+        )
 
         if cidade_sel != "Todas":
             df_map = df_map[df_map["ID_MN_RESI"] == cidade_sel]
 
-    # 3. Lógica do Gráfico
-    if cidade_sel == "Todas":
-        # MAPA POR ESTADO (Visão Geral)
-        casos_estado = df_map["SG_UF"].value_counts().reset_index()
-        casos_estado.columns = ["SG_UF", "casos"]
+    # ========================
+    # MAPA GERAL POR ESTADO
+    # ========================
 
-        geo_estado = geo.merge(casos_estado, left_on="sigla", right_on="SG_UF", how="left")
+    if cidade_sel == "Todas":
+
+        # Casos por município
+        df_municipio = (
+            df_map.groupby(["SG_UF", "ID_MN_RESI", "POPULACAO"])
+            .size()
+            .reset_index(name="casos")
+        )
+
+        # Casos por 100 mil habitantes
+        df_municipio["casos_100k"] = (
+            df_municipio["casos"] /
+            df_municipio["POPULACAO"]
+        ) * 100000
+
+        # Agrega para estado
+        casos_estado = (
+            df_municipio.groupby("SG_UF")
+            .agg({
+                "casos": "sum",
+                "POPULACAO": "sum"
+            })
+            .reset_index()
+        )
+
+        # Taxa estadual
+        casos_estado["casos_100k"] = (
+            casos_estado["casos"] /
+            casos_estado["POPULACAO"]
+        ) * 100000
+
+        # Junta com geojson
+        geo_estado = geo.merge(
+            casos_estado,
+            left_on="sigla",
+            right_on="SG_UF",
+            how="left"
+        )
+
         geo_estado = geo_estado.to_crs(epsg=4326)
-        
-        # Pega o centro do estado para o mapa de calor
+
+        # Centro dos estados
         geo_estado["lat"] = geo_estado.geometry.centroid.y
         geo_estado["lon"] = geo_estado.geometry.centroid.x
 
@@ -192,65 +238,132 @@ with tab2:
             geo_estado,
             lat="lat",
             lon="lon",
-            z="casos",
+            z="casos_100k",
             radius=40,
-            zoom=3.5, # Ajuste fino do zoom para caber o Brasil
-            center={"lat": -15.0, "lon": -53.0}, # Coordenadas centrais do Brasil!
+            zoom=3.5,
+            center={"lat": -15.0, "lon": -53.0},
             mapbox_style="carto-positron",
-            title="Mapa de Calor por Estado"
+            title="Casos por 100 mil Habitantes por Estado"
         )
-        # Deixa o mapa mais alto e tira as margens brancas mortas
-        fig.update_layout(height=600, margin={"r":0,"t":40,"l":0,"b":0})
+
+        fig.update_layout(
+            height=600,
+            margin={"r":0, "t":40, "l":0, "b":0}
+        )
+
         st.plotly_chart(fig, use_container_width=True)
 
+    # ========================
+    # MAPA POR CIDADE
+    # ========================
+
     else:
-        # MAPA POR CIDADE (Visão Específica com Lat/Lon reais)
+
         st.info(f"📍 Mostrando dados focados em: {cidade_sel}")
-            
-        
-        
-        
-        # Verifica se as colunas de coordenada existem e não estão vazias para essa cidade
-        if "latitude" in df_map.columns and "longitude" in df_map.columns and pd.notna(df_map["latitude"].iloc[0]):
-            
-            # Conta os casos nessa localidade para definir a intensidade da "mancha" de calor
-            casos_cidade = df_map.groupby(["ID_MN_RESI", "latitude", "longitude"]).size().reset_index(name="casos")
-            
-            # Calcula o meio exato da cidade para a câmera focar nela!
+
+        if (
+            "latitude" in df_map.columns and
+            "longitude" in df_map.columns and
+            len(df_map) > 0 and
+            pd.notna(df_map["latitude"].iloc[0])
+        ):
+
+            # Casos por cidade
+            casos_cidade = (
+                df_map.groupby([
+                    "ID_MN_RESI",
+                    "latitude",
+                    "longitude",
+                    "POPULACAO"
+                ])
+                .size()
+                .reset_index(name="casos")
+            )
+
+            # Casos por 100 mil habitantes
+            casos_cidade["casos_100k"] = (
+                casos_cidade["casos"] /
+                casos_cidade["POPULACAO"]
+            ) * 100000
+
+            # Centro da cidade
             centro_lat = casos_cidade["latitude"].mean()
             centro_lon = casos_cidade["longitude"].mean()
-            
+
             fig = px.density_mapbox(
                 casos_cidade,
                 lat="latitude",
                 lon="longitude",
-                z="casos",
+                z="casos_100k",
                 radius=50,
-                zoom=10, # Zoom bem próximo (nível de ruas/bairros)
-                center={"lat": centro_lat, "lon": centro_lon}, # Foca na cidade!
+                zoom=10,
+                center={
+                    "lat": centro_lat,
+                    "lon": centro_lon
+                },
                 mapbox_style="carto-positron",
-                title=f"Densidade de Casos - {cidade_sel}"
+                title=f"Casos por 100 mil Habitantes - {cidade_sel}"
             )
-            # Mesma formatação de altura e bordas
-            fig.update_layout(height=600, margin={"r":0,"t":40,"l":0,"b":0})
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.warning(f"⚠️ Não foi possível encontrar as coordenadas para a cidade de {cidade_sel}. Verifique se o código IBGE dela existe no arquivo municipios.csv.")
 
-    # Gráfico de barras de brinde embaixo do mapa
-    st.subheader("📊 Top Casos por Cidade")
-    if "ID_MN_RESI" in df_map.columns and len(df_map) > 0:
-        df_city = df_map["ID_MN_RESI"].value_counts().reset_index()
-        df_city.columns = ["Cidade", "casos"]
+            fig.update_layout(
+                height=600,
+                margin={"r":0, "t":40, "l":0, "b":0}
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+        else:
+            st.warning(
+                f"⚠️ Não foi possível encontrar as coordenadas "
+                f"para a cidade de {cidade_sel}."
+            )
+
+    # ========================
+    # GRÁFICO DE BARRAS
+    # ========================
+
+    st.subheader("📊 Top Cidades por Incidência")
+
+    if (
+        "ID_MN_RESI" in df_map.columns and
+        "POPULACAO" in df_map.columns and
+        len(df_map) > 0
+    ):
+
+        df_city = (
+            df_map.groupby([
+                "ID_MN_RESI",
+                "POPULACAO"
+            ])
+            .size()
+            .reset_index(name="casos")
+        )
+
+        # Casos por 100 mil habitantes
+        df_city["casos_100k"] = (
+            df_city["casos"] /
+            df_city["POPULACAO"]
+        ) * 100000
+
+        # Ordena pelas maiores incidências
+        df_city = df_city.sort_values(
+            by="casos_100k",
+            ascending=False
+        )
 
         fig = px.bar(
             df_city.head(20),
-            x="Cidade",
-            y="casos",
-            title="Cidades com Mais Casos Filtrados",
-            color="casos",
-            color_continuous_scale="Reds"
+            x="ID_MN_RESI",
+            y="casos_100k",
+            title="Cidades com Maior Incidência (por 100 mil hab.)",
+            color="casos_100k",
+            color_continuous_scale="Reds",
+            labels={
+                "ID_MN_RESI": "Cidade",
+                "casos_100k": "Casos por 100 mil hab."
+            }
         )
+
         st.plotly_chart(fig, use_container_width=True)
 
 # ========================
@@ -258,25 +371,40 @@ with tab2:
 # ========================
 
 with tab3:
+    # 1. Preparação dos dados (mantive sua lógica)
     geo = gpd.read_file(MAPA)
-
     casos_estado = df["SG_UF"].value_counts().reset_index()
     casos_estado.columns = ["SG_UF", "casos"]
 
     geo = geo.merge(casos_estado, left_on="sigla", right_on="SG_UF", how="left")
-
     geo = geo.to_crs(epsg=4326)
 
+    # 2. Criação do gráfico
     fig = px.choropleth_mapbox(
         geo,
         geojson=geo.__geo_interface__,
         locations=geo.index,
         color="casos",
-        mapbox_style="open-street-map",
-        zoom=3,
-        center={"lat": -14, "lon": -51},
-        opacity=0.6,
-        title="Casos por Estado"
+        hover_name="name", # Mostra o nome do estado no topo do card
+        hover_data={"SG_UF": True, "casos": True}, 
+        mapbox_style="carto-positron", # Estilo mais clean e profissional
+        zoom=3.3, # Ajuste fino do zoom para o Brasil
+        center={"lat": -15.5, "lon": -55}, # Centralizado levemente para a esquerda
+        opacity=0.7,
+        color_continuous_scale="Blues", # Escala de cor elegante
+        title="<b>Distribuição de Casos por Estado</b>"
+    )
+
+    # 3. O Pulo do Gato: Ajuste de Altura e Margens
+    fig.update_layout(
+        height=750, # Aqui você força o formato mais quadrado/vertical
+        margin={"r":0,"t":50,"l":0,"b":0}, # Remove bordas inúteis
+        coloraxis_colorbar=dict(
+            title="Nº Casos",
+            thicknessmode="pixels", thickness=15,
+            lenmode="pixels", len=300,
+            yanchor="middle", y=0.5
+        )
     )
 
     st.plotly_chart(fig, use_container_width=True)
@@ -288,22 +416,35 @@ with tab3:
 with tab4:
     st.subheader("🌳 Árvore Hierárquica")
 
-    df_tree = df.copy()
-
-    df_tree = df_tree.dropna(subset=["SG_UF", "ID_MN_RESI", "DOENCA"])
+    df_tree = df.copy().dropna(subset=["SG_UF", "ID_MN_RESI", "DOENCA"])
 
     if len(df_tree) == 0:
         st.warning("Sem dados suficientes para árvore.")
     else:
-        df_tree = df_tree.groupby(
-            ["SG_UF", "ID_MN_RESI", "DOENCA"]
-        ).size().reset_index(name="count")
+        # Agrupamento
+        df_tree = df_tree.groupby(["SG_UF", "ID_MN_RESI", "DOENCA"]).size().reset_index(name="count")
+        
+        # Opcional: Filtrar apenas cidades com contagem relevante para limpar o gráfico
+        # df_tree = df_tree[df_tree['count'] > 5] 
 
         fig = px.treemap(
             df_tree,
-            path=["SG_UF", "ID_MN_RESI", "DOENCA"],
+            path=[px.Constant("Brasil"), "SG_UF", "ID_MN_RESI", "DOENCA"], # Adiciona um nó raiz
             values="count",
-            title="Hierarquia: Estado → Cidade → Doença"
+            color="count", # Cor baseada na quantidade (mais intuitivo)
+            color_continuous_scale="Viridis", # Uma paleta mais profissional
+            maxdepth=2, # MOSTRA APENAS ESTADOS NO INÍCIO (Clique para aprofundar)
+        )
+
+        # Ajustes de layout e interatividade
+        fig.update_traces(
+            hovertemplate="<b>%{label}</b><br>Casos: %{value}<br>Pai: %{parent}",
+            textinfo="label+value" # Mostra o nome e o valor dentro do quadrado
+        )
+
+        fig.update_layout(
+            margin=dict(t=30, l=10, r=10, b=10),
+            height=600 # Aumentar a altura ajuda na legibilidade
         )
 
         st.plotly_chart(fig, use_container_width=True)
