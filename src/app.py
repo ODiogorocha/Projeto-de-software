@@ -27,11 +27,13 @@ st.title("📊 Dashboard SRAG - Análise Completa")
 # CAMINHOS
 # ========================
 
-ARQUIVO = r"/home/gabriel/Projetos/Projeto-de-software/docs/database/INFLUD19-23-03-2026.csv"
-MAPA = r"/home/gabriel/Projetos/Projeto-de-software/src/brasil_estados.geojson"
+# O seu arquivo original
+ARQUIVO = r"/home/diogo/Documentos/codigos/Projeto-de-software/docs/database/INFLUD19-26-06-2025.csv"
+MAPA = r"/home/diogo/Documentos/codigos/Projeto-de-software/src/brasil_estados.geojson"
 
 # 2. ADICIONE O CAMINHO DO SEU CSV DE MUNICÍPIOS AQUI:
-ARQUIVO_CIDADES = r"/home/gabriel/Projetos/Projeto-de-software/docs/database/municipios.csv" 
+# (Troque pelo caminho real de onde você salvou o arquivo no seu computador)
+ARQUIVO_CIDADES = r"/home/diogo/Documentos/codigos/Projeto-de-software/docs/database/municipios.csv" 
 
 # ========================
 # DADOS
@@ -134,7 +136,7 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
 ])
 
 # ========================
-# 📊 ABA 1 - GERAL (Refatorada)
+# ABA 1 - GERAL
 # ========================
 
 with tab1:
@@ -196,11 +198,11 @@ with tab1:
         st.plotly_chart(fig, use_container_width=True)
 
 # ========================
-# 🔥 ABA 2 - HEATMAP + CIDADES
+#  ABA 2 - HEATMAP + CIDADES
 # ========================
 
 with tab2:
-    st.subheader("🔥 Heatmap e Distribuição Geográfica")
+    st.subheader(" Heatmap e Distribuição Geográfica")
 
     # ========================
     # FILTRO DE ESTADO
@@ -408,7 +410,7 @@ with tab2:
         st.plotly_chart(fig, use_container_width=True)
 
 # ========================
-# 🗺️ ABA 3 - MAPA COROPLÉTICO
+#  ABA 3 - MAPA COROPLÉTICO
 # ========================
 
 with tab3:
@@ -450,11 +452,11 @@ with tab3:
     st.plotly_chart(fig, use_container_width=True)
 
 # ========================
-# 🌳 ABA 4 - ÁRVORE
+#  ABA 4 - ÁRVORE
 # ========================
 
 with tab4:
-    st.subheader("🌳 Árvore Hierárquica")
+    st.subheader(" Árvore Hierárquica")
 
     df_tree = df.copy().dropna(subset=["SG_UF", "ID_MN_RESI", "DOENCA"])
 
@@ -490,7 +492,7 @@ with tab4:
         st.plotly_chart(fig, use_container_width=True)
 
 # ========================
-# 📈 ABA 5 - TEMPORAL
+#  ABA 5 - TEMPORAL
 # ========================
 
 with tab5:
@@ -513,7 +515,7 @@ with tab5:
         st.plotly_chart(fig, use_container_width=True)
 
 # ========================
-# 📊 ABA 6 - DISTRIBUIÇÕES
+#  ABA 6 - DISTRIBUIÇÕES
 # ========================
 
 with tab6:
