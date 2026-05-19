@@ -52,28 +52,67 @@ def mesclar_coordenadas(df_principal, df_coords):
     print("Cruzando dados epidemiológicos pelo Código IBGE...")
     
     if df_coords is not None:
-        # Verifica se as colunas necessárias existem
-        if "CO_MUN_RES" in df_principal.columns and "codigo_ibge" in df_coords.columns:
-            
-            # Converte para string, remove '.0' se houver, e pega os 6 primeiros dígitos para padronizar
-            df_principal["cod_ibge_join"] = df_principal["CO_MUN_RES"].astype(str).str.replace(r'\.0$', '', regex=True).str[:6]
-            df_coords["cod_ibge_join"] = df_coords["codigo_ibge"].astype(str).str.replace(r'\.0$', '', regex=True).str[:6]
-            
-            # Faz o cruzamento (Left Join garante que NENHUMA linha do df_principal seja perdida)
-            # Trazemos apenas latitude e longitude para não poluir o dataset principal
+
+        # Verifica colunas necessárias
+        if (
+            "CO_MUN_RES" in df_principal.columns and
+            "codigo_ibge" in df_coords.columns
+        ):
+
+            # Padroniza código IBGE
+            df_principal["cod_ibge_join"] = (
+                df_principal["CO_MUN_RES"]
+                .astype(str)
+                .str.replace(r'\.0$', '', regex=True)
+                .str[:6]
+            )
+
+            df_coords["cod_ibge_join"] = (
+                df_coords["codigo_ibge"]
+                .astype(str)
+                .str.replace(r'\.0$', '', regex=True)
+                .str[:6]
+            )
+
+            # ==========================================
+            # IMPORTANTE:
+            # TROQUE "populacao" PELO NOME REAL
+            # DA COLUNA NO SEU municipios.csv
+            # ==========================================
+
             df_merged = pd.merge(
                 df_principal,
-                df_coords[["cod_ibge_join", "latitude", "longitude"]],
+                df_coords[
+                    [
+                        "cod_ibge_join",
+                        "latitude",
+                        "longitude",
+                        "populacao"
+                    ]
+                ],
                 on="cod_ibge_join",
-                how="left" # <-- ISSO AQUI SALVA SEUS DADOS!
+                how="left"
             )
-            
-            # Remove a coluna temporária usada pro cruzamento
+
+            # Renomeia para padronizar
+            df_merged = df_merged.rename(columns={
+                "populacao": "POPULACAO"
+            })
+
+            # Remove coluna temporária
             df_merged = df_merged.drop(columns=["cod_ibge_join"])
-            
-            print(f"Total de registros após mesclar coordenadas: {len(df_merged)}")
+
+            print(
+                f"Total de registros após mesclar coordenadas: "
+                f"{len(df_merged)}"
+            )
+
             return df_merged
+
         else:
-            print("AVISO: Coluna 'CO_MUN_RES' ou 'codigo_ibge' não encontrada. Verifique os nomes das colunas.")
-            
+            print(
+                "AVISO: Coluna 'CO_MUN_RES' ou "
+                "'codigo_ibge' não encontrada."
+            )
+
     return df_principal

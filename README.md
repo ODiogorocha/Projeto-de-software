@@ -163,3 +163,10 @@ git push
 ```
 
 ---
+
+### adicionar uma arvore de decisao para o tipo de gripe 
+adicionar uma tabela com os sintomas de cada doença, gripe resfriado e etc, usar aprioricom metricas de confinça e suporte  Outro Vírus       0.62      0.70      0.66       159
+
+
+
+deixae as variaveis similares 
