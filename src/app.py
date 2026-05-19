@@ -20,7 +20,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-st.set_page_config(layout="wide", page_title="Dashboard SRAG")
 st.title("📊 Dashboard SRAG - Análise Completa")
 
 # ========================
@@ -28,12 +27,12 @@ st.title("📊 Dashboard SRAG - Análise Completa")
 # ========================
 
 # O seu arquivo original
-ARQUIVO = r"/home/diogo/Documentos/codigos/Projeto-de-software/docs/database/INFLUD19-26-06-2025.csv"
-MAPA = r"/home/diogo/Documentos/codigos/Projeto-de-software/src/brasil_estados.geojson"
+ARQUIVO = r"/home/gabriel/Projetos/Projeto-de-software/docs/database/INFLUD19-23-03-2026.csv"
+MAPA = r"/home/gabriel/Projetos/Projeto-de-software/src/brasil_estados.geojson"
 
 # 2. ADICIONE O CAMINHO DO SEU CSV DE MUNICÍPIOS AQUI:
 # (Troque pelo caminho real de onde você salvou o arquivo no seu computador)
-ARQUIVO_CIDADES = r"/home/diogo/Documentos/codigos/Projeto-de-software/docs/database/municipios.csv" 
+ARQUIVO_CIDADES = r"/home/gabriel/Projetos/Projeto-de-software/docs/database/municipios.csv" 
 
 # ========================
 # DADOS
@@ -59,6 +58,49 @@ df = df_total.copy()
 @st.cache_data
 def load_mapa():
     return gpd.read_file(MAPA)
+
+def aplicar_estilo(fig, altura=500):
+
+    fig.update_layout(
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+
+        font=dict(
+            color="white",
+            family="Arial"
+        ),
+
+        title=dict(
+            x=0.02,
+            xanchor="left",
+            font=dict(size=22)
+        ),
+
+        margin=dict(
+            t=60,
+            b=20,
+            l=20,
+            r=20
+        ),
+
+        height=altura,
+
+        xaxis=dict(
+            showgrid=False,
+            zeroline=False,
+            color="white"
+        ),
+
+        yaxis=dict(
+            gridcolor="rgba(255,255,255,0.08)",
+            zeroline=False,
+            color="white"
+        )
+    )
+
+    return fig
+
+COR_PRINCIPAL = "Inferno"
 
 # Executando as funções e salvando nas variáveis globais do app
 df_total = load_data()
@@ -103,6 +145,51 @@ doenca = st.sidebar.multiselect(
 df = df[df["SG_UF"].isin(estado)]
 df = df[df["DOENCA"].isin(doenca)]
 
+st.sidebar.subheader("👥 População")
+
+pop_min = st.sidebar.number_input(
+    "População mínima",
+    min_value=0,
+    value=0,
+    step=10000
+)
+
+pop_max = st.sidebar.number_input(
+    "População máxima",
+    min_value=0,
+    value=3000000,
+    step=10000
+)
+if "POPULACAO" in df.columns:
+    df = df[
+        (df["POPULACAO"] >= pop_min) &
+        (df["POPULACAO"] <= pop_max)
+    ]
+
+# ========================
+# FILTRO TEMPORAL
+# ========================
+
+if "DT_NOTIFIC" in df.columns:
+    anos_disponiveis = sorted(
+        df["DT_NOTIFIC"].dt.year.dropna().astype(int).unique()
+    )
+
+    anos = st.sidebar.multiselect(
+        "Ano",
+        anos_disponiveis,
+        default=anos_disponiveis
+    )
+
+    meses = st.sidebar.multiselect(
+        "Mês",
+        list(range(1, 13)),
+        default=list(range(1, 13))
+    )
+
+    df = df[df["DT_NOTIFIC"].dt.year.isin(anos)]
+    df = df[df["DT_NOTIFIC"].dt.month.isin(meses)]
+
 # ========================
 # KPIs
 # ========================
@@ -146,30 +233,19 @@ with tab1:
         df_pie = df["DOENCA"].value_counts().reset_index()
         df_pie.columns = ["DOENCA", "count"]
 
-        fig = px.pie(
+        fig = px.bar(
             df_pie,
-            names="DOENCA",
-            values="count",
-            hole=0.5, # Aumentado para um visual "Donut" mais moderno
+            x="count",
+            y="DOENCA",
+            orientation="h",
             title="<b>Distribuição por Doença</b>",
-            color_discrete_sequence=px.colors.qualitative.Prism # Paleta mais vibrante
+            color="count",
+            color_continuous_scale=COR_PRINCIPAL,
+            labels={"count": "Casos", "DOENCA": "Doença"}
         )
-        
-        # Ajustes de Interatividade e Estilo
-        fig.update_traces(
-            textposition='inside', 
-            textinfo='percent+label',
-            marker=dict(line=dict(color='#1e293b', width=2)) # Borda para separar fatias
-        )
-        
-        fig.update_layout(
-            paper_bgcolor='rgba(0,0,0,0)', # Fundo transparente
-            plot_bgcolor='rgba(0,0,0,0)',
-            font_color="white",
-            showlegend=False, # Labels já estão no gráfico, economiza espaço
-            margin=dict(t=50, b=20, l=20, r=20)
-        )
-        st.plotly_chart(fig, use_container_width=True)
+
+        fig = aplicar_estilo(fig, 500)
+        st.plotly_chart(fig, width="stretch")
 
     with col2:
         df_bar = df["SG_UF"].value_counts().reset_index()
@@ -180,22 +256,23 @@ with tab1:
             x="SG_UF",
             y="count",
             title="<b>Casos por Estado</b>",
-            color="count", # Cor gradiente baseada no volume
-            color_continuous_scale="Blues",
+            color="count",
+            color_continuous_scale=COR_PRINCIPAL,
             labels={"count": "Casos", "SG_UF": "UF"}
         )
         
         fig.update_layout(
-            paper_bgcolor='rgba(0,0,0,0)', # Fundo transparente
+            paper_bgcolor='rgba(0,0,0,0)',
             plot_bgcolor='rgba(0,0,0,0)',
             font_color="white",
-            xaxis={'categoryorder':'total descending'}, # Garante a ordem do maior para o menor
-            coloraxis_showscale=False, # Remove a barra de cores lateral para limpar o visual
+            xaxis={'categoryorder':'total descending'},
+            coloraxis_showscale=False,
             margin=dict(t=50, b=20, l=20, r=20)
         )
         
-        fig.update_traces(marker_line_color='rgba(0,0,0,0)') # Remove bordas das barras
-        st.plotly_chart(fig, use_container_width=True)
+        fig.update_traces(marker_line_color='rgba(0,0,0,0)')
+        fig = aplicar_estilo(fig, 500) 
+        st.plotly_chart(fig, width="stretch")
 
 # ========================
 #  ABA 2 - HEATMAP + CIDADES
@@ -263,17 +340,18 @@ with tab2:
             ) * 100000
 
             # Cria o Heatmap
-            fig = px.density_mapbox(
+            fig = px.density_map(
                 casos_brasil_cidades,
                 lat="latitude",
                 lon="longitude",
                 z="casos_100k",
-                radius=15, # Raio menor (15-20) evita que o Brasil vire um borrão gigante
+                radius=15,
                 zoom=3.5,
-                center={"lat": -15.5, "lon": -55.0}, # Centro do Brasil
-                mapbox_style="carto-positron",
+                center={"lat": -15.5, "lon": -55.0},
+                color_continuous_scale=COR_PRINCIPAL,
+                map_style="carto-positron",
                 title="<b>Heatmap: Casos por 100 mil hab. (Por Cidade)</b>",
-                hover_name="ID_MN_RESI", # O nome da cidade aparece ao passar o mouse!
+                hover_name="ID_MN_RESI",
                 hover_data={"latitude": False, "longitude": False, "casos_100k": ':.2f'}
             )
 
@@ -288,8 +366,9 @@ with tab2:
                     yanchor="middle", y=0.5
                 )
             )
+            fig = aplicar_estilo(fig, 750)
 
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
             
         else:
             st.warning("⚠️ As colunas 'latitude' e 'longitude' não foram encontradas. Verifique o cruzamento de coordenadas.")
@@ -333,7 +412,7 @@ with tab2:
             centro_lat = casos_cidade["latitude"].mean()
             centro_lon = casos_cidade["longitude"].mean()
 
-            fig = px.density_mapbox(
+            fig = px.density_map(
                 casos_cidade,
                 lat="latitude",
                 lon="longitude",
@@ -344,7 +423,8 @@ with tab2:
                     "lat": centro_lat,
                     "lon": centro_lon
                 },
-                mapbox_style="carto-positron",
+                map_style="carto-positron",
+                color_continuous_scale=COR_PRINCIPAL,
                 title=f"Casos por 100 mil Habitantes - {cidade_sel}"
             )
 
@@ -353,7 +433,7 @@ with tab2:
                 margin={"r":0, "t":40, "l":0, "b":0}
             )
 
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
         else:
             st.warning(
@@ -407,10 +487,18 @@ with tab2:
             }
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
-# ========================
-#  ABA 3 - MAPA COROPLÉTICO
+        # Insight automático
+        cidade_critica = (
+            df_city.sort_values("casos_100k", ascending=False)
+            .iloc[0]
+        )
+        st.info(
+            f"📌 Maior incidência encontrada em "
+            f"**{cidade_critica['ID_MN_RESI']}** "
+            f"com {cidade_critica['casos_100k']:.2f} casos por 100 mil habitantes."
+        )
 # ========================
 
 with tab3:
@@ -422,25 +510,25 @@ with tab3:
     geo = geo.to_crs(epsg=4326)
 
     # 2. Criação do gráfico
-    fig = px.choropleth_mapbox(
+    fig = px.choropleth_map(
         geo,
         geojson=geo.__geo_interface__,
         locations=geo.index,
         color="casos",
-        hover_name="name", # Mostra o nome do estado no topo do card
-        hover_data={"SG_UF": True, "casos": True}, 
-        mapbox_style="carto-positron", # Estilo mais clean e profissional
-        zoom=3.3, # Ajuste fino do zoom para o Brasil
-        center={"lat": -15.5, "lon": -55}, # Centralizado levemente para a esquerda
+        hover_name="name",
+        hover_data={"SG_UF": True, "casos": True},
+        map_style="carto-positron",
+        zoom=3.3,
+        center={"lat": -15.5, "lon": -55},
         opacity=0.7,
-        color_continuous_scale="Blues", # Escala de cor elegante
+        color_continuous_scale=COR_PRINCIPAL,
         title="<b>Distribuição de Casos por Estado</b>"
     )
 
     # 3. O Pulo do Gato: Ajuste de Altura e Margens
     fig.update_layout(
-        height=750, # Aqui você força o formato mais quadrado/vertical
-        margin={"r":0,"t":50,"l":0,"b":0}, # Remove bordas inúteis
+        height=750,
+        margin={"r":0,"t":50,"l":0,"b":0},
         coloraxis_colorbar=dict(
             title="Nº Casos",
             thicknessmode="pixels", thickness=15,
@@ -448,8 +536,9 @@ with tab3:
             yanchor="middle", y=0.5
         )
     )
+    fig = aplicar_estilo(fig, 750)
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 # ========================
 #  ABA 4 - ÁRVORE
@@ -471,25 +560,31 @@ with tab4:
 
         fig = px.treemap(
             df_tree,
-            path=[px.Constant("Brasil"), "SG_UF", "ID_MN_RESI", "DOENCA"], # Adiciona um nó raiz
+            path=[px.Constant("Brasil"), "SG_UF", "ID_MN_RESI", "DOENCA"],
             values="count",
-            color="count", # Cor baseada na quantidade (mais intuitivo)
-            color_continuous_scale="Viridis", # Uma paleta mais profissional
-            maxdepth=2, # MOSTRA APENAS ESTADOS NO INÍCIO (Clique para aprofundar)
+            color="count",
+            color_continuous_scale=COR_PRINCIPAL,
+            maxdepth=2,
         )
 
-        # Ajustes de layout e interatividade
         fig.update_traces(
             hovertemplate="<b>%{label}</b><br>Casos: %{value}<br>Pai: %{parent}",
-            textinfo="label+value" # Mostra o nome e o valor dentro do quadrado
+            textinfo="label+value",
+            marker=dict(
+                line=dict(
+                    width=1,
+                    color="rgba(255,255,255,0.08)"
+                )
+            )
         )
 
         fig.update_layout(
             margin=dict(t=30, l=10, r=10, b=10),
-            height=600 # Aumentar a altura ajuda na legibilidade
+            height=600
         )
+        fig = aplicar_estilo(fig, 650)
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
 # ========================
 #  ABA 5 - TEMPORAL
@@ -509,10 +604,17 @@ with tab5:
             x="ANO_MES",
             y="casos",
             color="DOENCA",
-            title="Evolução Temporal"
+            title="<b>Evolução Temporal</b>",
+            markers=True
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        fig.update_traces(
+            mode="lines+markers",
+            line=dict(width=4)
+        )
+
+        fig = aplicar_estilo(fig, 600)
+        st.plotly_chart(fig, width="stretch")
 
 # ========================
 #  ABA 6 - DISTRIBUIÇÕES
@@ -526,9 +628,11 @@ with tab6:
             df,
             x="NU_IDADE_N",
             nbins=30,
-            title="Distribuição de Idade"
+            title="<b>Distribuição de Idade</b>",
+            color_discrete_sequence=["#ff7b00"]
         )
-        st.plotly_chart(fig, use_container_width=True)
+        fig = aplicar_estilo(fig, 500)
+        st.plotly_chart(fig, width="stretch")
 
     with col2:
         if "OBITO" in df.columns:
@@ -536,9 +640,12 @@ with tab6:
                 df,
                 x="OBITO",
                 y="NU_IDADE_N",
-                title="Idade vs Óbito"
+                title="<b>Idade vs Óbito</b>",
+                color="OBITO",
+                color_discrete_sequence=["#ef4444", "#ffb703"]
             )
-            st.plotly_chart(fig, use_container_width=True)
+            fig = aplicar_estilo(fig, 500)
+            st.plotly_chart(fig, width="stretch")
 
 # ========================
 # MACHINE LEARNING
