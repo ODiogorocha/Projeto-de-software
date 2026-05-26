@@ -61,3 +61,14 @@ htmlcov/
 *.shx
 *.dbf
 *.cpg
+
+__pycache__/
+*.pyc
+
+venv/
+.env/
+
+.streamlit/
+
+.idea/
+.vscode/

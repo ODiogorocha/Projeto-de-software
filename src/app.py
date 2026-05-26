@@ -35,6 +35,14 @@ st.markdown("""
 if "pagina" not in st.session_state:
     st.session_state.pagina = "inicio"
 
+# O seu arquivo original
+ARQUIVO = r"/home/diogo/Documentos/codigos/Projeto-de-software/docs/database/INFLUD19-23-03-2026.csv"
+MAPA = r"/home/diogo/Documentos/codigos/Projeto-de-software/src/brasil_estados.geojson"
+
+# 2. ADICIONE O CAMINHO DO SEU CSV DE MUNICÍPIOS AQUI:
+# (Troque pelo caminho real de onde você salvou o arquivo no seu computador)
+ARQUIVO_CIDADES = r"/home/diogo/Documentos/codigos/Projeto-de-software/docs/database/municipios.csv"
+
 # ========================
 # PÁGINA DE APRESENTAÇÃO
 # ========================
@@ -246,9 +254,9 @@ if st.session_state.pagina == "inicio":
 # ========================
 
 # ── Caminhos ─────────────────────────────────────────────────────────────
-ARQUIVO         = r"/home/gabriel/Projetos/Projeto-de-software/docs/database/INFLUD19-23-03-2026.csv"
-MAPA            = r"/home/gabriel/Projetos/Projeto-de-software/src/brasil_estados.geojson"
-ARQUIVO_CIDADES = r"/home/gabriel/Projetos/Projeto-de-software/docs/database/municipios.csv"
+ARQUIVO = r"/home/diogo/Documentos/codigos/Projeto-de-software/docs/database/INFLUD19-23-03-2026.csv"
+MAPA = r"/home/diogo/Documentos/codigos/Projeto-de-software/src/brasil_estados.geojson"
+ARQUIVO_CIDADES = r"/home/diogo/Documentos/codigos/Projeto-de-software/docs/database/municipios.csv"
 
 # ── Dados ─────────────────────────────────────────────────────────────────
 @st.cache_data
