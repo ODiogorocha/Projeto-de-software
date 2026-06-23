@@ -1,118 +1,106 @@
 import pandas as pd
+import os
+import glob
 
 def carregar_dados(caminho):
-    print("Carregando dados...")
+    print(f"Buscando dados em: {caminho}")
+    
+    # Colunas essenciais para o dashboard rodar leve
+    colunas_uteis = [
+        "DT_NOTIFIC", "SG_UF", "CLASSI_FIN", "NU_IDADE_N", 
+        "CS_SEXO", "EVOLUCAO", "CO_MUN_RES", "ID_MN_RESI"  # <-- ADICIONAMOS AQUI!
+    ]
+    
+    if os.path.isdir(caminho):
+        print("É um diretório! Buscando arquivos lá dentro...")
+        
+        arquivos_parquet = glob.glob(os.path.join(caminho, "*.parquet"))
+        if arquivos_parquet:
+            print("Lendo Parquet otimizado...")
+            colunas_existentes = pd.read_parquet(arquivos_parquet[0], engine='pyarrow').columns
+            cols = [c for c in colunas_uteis if c in colunas_existentes]
+            return pd.read_parquet(caminho, engine='pyarrow', columns=cols)
+            
+        arquivos_csv = glob.glob(os.path.join(caminho, "*.csv"))
+        arquivos_csv = [f for f in arquivos_csv if "municipios" not in os.path.basename(f).lower()]
+        
+        if arquivos_csv:
+            print("Lendo CSV otimizado...")
+            lista_dfs = []
+            for f in arquivos_csv:
+                df_temp = pd.read_csv(f, sep=';', encoding='latin1', low_memory=False, usecols=lambda c: c in colunas_uteis)
+                lista_dfs.append(df_temp)
+            return pd.concat(lista_dfs, ignore_index=True)
+            
+        return pd.DataFrame()
 
-    df = pd.read_csv(
-        caminho,
-        sep=';',
-        encoding='latin1',
-        low_memory=False
-    )
-
-    print(f"Total de registros originais: {len(df)}")
-    return df
+    elif os.path.isfile(caminho):
+        if caminho.endswith('.parquet'):
+            colunas_existentes = pd.read_parquet(caminho, engine='pyarrow').columns
+            cols = [c for c in colunas_uteis if c in colunas_existentes]
+            return pd.read_parquet(caminho, engine='pyarrow', columns=cols)
+        elif caminho.endswith('.csv'):
+            return pd.read_csv(caminho, sep=';', encoding='latin1', low_memory=False, usecols=lambda c: c in colunas_uteis)
+            
+    return pd.DataFrame()
 
 
 def tratar_dados(df):
-    print("Tratando dados (sem excluir)...")
-
-    # Data
-    df["DT_NOTIFIC"] = pd.to_datetime(df["DT_NOTIFIC"], errors='coerce')
-
-    # Idade
-    df["NU_IDADE_N"] = pd.to_numeric(df["NU_IDADE_N"], errors='coerce')
-
-    # Sexo → numérico
-    df["SEXO"] = df["CS_SEXO"].map({"M": 0, "F": 1})
-
-    # Óbito
-    df["OBITO"] = df["EVOLUCAO"].apply(
-        lambda x: 1 if x == 2 else 0 if pd.notnull(x) else None
-    )
-
+    print("Tratando dados...")
+    if df.empty: return df
+    
+    if "DT_NOTIFIC" in df.columns:
+        df["DT_NOTIFIC"] = pd.to_datetime(df["DT_NOTIFIC"], errors='coerce')
+    if "NU_IDADE_N" in df.columns:
+        df["NU_IDADE_N"] = pd.to_numeric(df["NU_IDADE_N"], errors='coerce')
+    if "CS_SEXO" in df.columns:
+        df["SEXO"] = df["CS_SEXO"].map({"M": 0, "F": 1})
+    if "EVOLUCAO" in df.columns:
+        df["OBITO"] = df["EVOLUCAO"].apply(lambda x: 1 if x == 2 else 0 if pd.notnull(x) else None)
+        
     return df
 
-# ==========================================
-# NOVAS FUNÇÕES PARA O MAPA DE CALOR
-# ==========================================
 
-def carregar_coordenadas(caminho_csv_municipios):
-    print("Carregando base de coordenadas geográficas (CSV)...")
-    try:
-        # Lê o CSV. Se der erro de formatação com seu arquivo, tente sep=';'
-        df_coords = pd.read_csv(caminho_csv_municipios, sep=',', encoding='utf-8')
-        return df_coords
-    except Exception as e:
-        print(f"Erro ao carregar o arquivo de coordenadas: {e}")
-        return None
+def carregar_coordenadas(caminho):
+    print("Carregando base de coordenadas...")
+    if os.path.exists(caminho):
+        if caminho.endswith('.parquet'):
+            return pd.read_parquet(caminho, engine='pyarrow')
+        else:
+            return pd.read_csv(caminho, sep=',', encoding='utf-8')
+    return None
 
 
 def mesclar_coordenadas(df_principal, df_coords):
-    print("Cruzando dados epidemiológicos pelo Código IBGE...")
+    print("Cruzando dados epidemiológicos com coordenadas...")
     
-    if df_coords is not None:
-
-        # Verifica colunas necessárias
-        if (
-            "CO_MUN_RES" in df_principal.columns and
-            "codigo_ibge" in df_coords.columns
-        ):
-
-            # Padroniza código IBGE
-            df_principal["cod_ibge_join"] = (
-                df_principal["CO_MUN_RES"]
-                .astype(str)
-                .str.replace(r'\.0$', '', regex=True)
-                .str[:6]
-            )
-
-            df_coords["cod_ibge_join"] = (
-                df_coords["codigo_ibge"]
-                .astype(str)
-                .str.replace(r'\.0$', '', regex=True)
-                .str[:6]
-            )
-
-            # ==========================================
-            # IMPORTANTE:
-            # TROQUE "populacao" PELO NOME REAL
-            # DA COLUNA NO SEU municipios.csv
-            # ==========================================
-
+    if df_coords is not None and not df_principal.empty:
+        if "CO_MUN_RES" in df_principal.columns and "codigo_ibge" in df_coords.columns:
+            
+            # Remove a coluna ID_MN_RESI original (se existir) para evitar duplicatas, 
+            # pois vamos usar os nomes limpinhos do seu arquivo de municípios!
+            if "ID_MN_RESI" in df_principal.columns:
+                df_principal = df_principal.drop(columns=["ID_MN_RESI"])
+            
+            # Cria a chave de cruzamento (6 primeiros dígitos do IBGE)
+            df_principal["cod_ibge_join"] = df_principal["CO_MUN_RES"].astype(str).str.replace(r'\.0$', '', regex=True).str[:6]
+            df_coords["cod_ibge_join"] = df_coords["codigo_ibge"].astype(str).str.replace(r'\.0$', '', regex=True).str[:6]
+            
+            # Traz a 'cidade', 'latitude', 'longitude' e 'populacao' do seu CSV
             df_merged = pd.merge(
                 df_principal,
-                df_coords[
-                    [
-                        "cod_ibge_join",
-                        "latitude",
-                        "longitude",
-                        "populacao"
-                    ]
-                ],
-                on="cod_ibge_join",
+                df_coords[["cod_ibge_join", "cidade", "latitude", "longitude", "populacao"]],
+                on="cod_ibge_join", 
                 how="left"
             )
-
-            # Renomeia para padronizar
+            
+            # Renomeia para o padrão exato que o Dashboard (app.py) espera!
             df_merged = df_merged.rename(columns={
-                "populacao": "POPULACAO"
+                "populacao": "POPULACAO",
+                "cidade": "ID_MN_RESI"
             })
-
-            # Remove coluna temporária
-            df_merged = df_merged.drop(columns=["cod_ibge_join"])
-
-            print(
-                f"Total de registros após mesclar coordenadas: "
-                f"{len(df_merged)}"
-            )
-
-            return df_merged
-
-        else:
-            print(
-                "AVISO: Coluna 'CO_MUN_RES' ou "
-                "'codigo_ibge' não encontrada."
-            )
-
+            
+            # Limpa a coluna temporária
+            return df_merged.drop(columns=["cod_ibge_join"])
+            
     return df_principal
