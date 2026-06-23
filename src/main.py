@@ -1,226 +1,94 @@
+import os
 import pandas as pd
 import matplotlib.pyplot as plt
-import numpy as np
 
-ARQUIVO = "/home/gabriel/Projetos/Projeto-de-software/docs/database/INFLUD19-26-06-2025.csv"
-
-
-# ========================
-# CARREGAMENTO
-# ========================
-
-def carregar_dados(caminho):
-    print("Carregando dados...")
-
-    colunas = [
-        "SG_UF", "DT_NOTIFIC", "CLASSI_FIN",
-        "ID_MUNICIP", "CS_SEXO",
-        "NU_IDADE_N", "EVOLUCAO"
-    ]
-
-    df = pd.read_csv(
-        caminho,
-        sep=';',
-        usecols=colunas,
-        encoding='latin1',
-        low_memory=False
-    )
-
-    print(f"Total de registros: {len(df)}")
-    return df
-
+# Importando as funções do seu novo data_loader
+from data_loader import carregar_dados, tratar_dados
 
 # ========================
-# TRATAMENTO
+# CAMINHOS DINÂMICOS
 # ========================
+# Descobre a pasta atual onde o main.py está salvo
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-def tratar_dados(df):
-    print("Tratando dados...")
+# Verifica se o main.py está dentro da 'src' ou já na raiz do projeto
+if os.path.basename(BASE_DIR) == "src":
+    ROOT_DIR = os.path.dirname(BASE_DIR)  # Volta uma pasta para a raiz
+else:
+    ROOT_DIR = BASE_DIR                   # Já está na raiz
 
-    df = df.dropna(subset=["SG_UF", "DT_NOTIFIC"])
-
-    df["DT_NOTIFIC"] = pd.to_datetime(df["DT_NOTIFIC"], errors='coerce')
-    df = df.dropna(subset=["DT_NOTIFIC"])
-
-    df["NU_IDADE_N"] = pd.to_numeric(df["NU_IDADE_N"], errors='coerce')
-
-    # Filtrar COVID
-    df = df[df["CLASSI_FIN"] == 5]
-
-    return df
-
+# Agora aponta de forma segura para os dados
+PASTA_DADOS = os.path.join(ROOT_DIR, "docs", "database")
 
 # ========================
-# VISUALIZAÇÕES AVANÇADAS
+# VISUALIZAÇÕES OFFLINE
 # ========================
-
 def heatmap_estado_mes(df):
     print("Gerando heatmap estado x tempo...")
+    if "DT_NOTIFIC" not in df.columns or "SG_UF" not in df.columns:
+        print("Colunas necessárias não encontradas.")
+        return
 
-    df["ANO_MES"] = df["DT_NOTIFIC"].dt.to_period("M").astype(str)
-
-    tabela = pd.crosstab(df["SG_UF"], df["ANO_MES"])
-
+    df_temp = df.dropna(subset=["DT_NOTIFIC", "SG_UF"]).copy()
+    df_temp["ANO_MES"] = df_temp["DT_NOTIFIC"].dt.to_period("M").astype(str)
+    
+    tabela = pd.crosstab(df_temp["SG_UF"], df_temp["ANO_MES"])
+    
     plt.figure(figsize=(12, 8))
-    plt.imshow(tabela, aspect='auto')
+    plt.imshow(tabela, aspect='auto', cmap='viridis')
     plt.colorbar(label="Casos")
-
+    
     plt.yticks(range(len(tabela.index)), tabela.index)
     plt.xticks(range(len(tabela.columns)), tabela.columns, rotation=90)
-
+    
     plt.title("Heatmap: Casos por Estado ao Longo do Tempo")
     plt.tight_layout()
     plt.show()
 
-
-def heatmap_idade_obito(df):
-    print("Heatmap idade x óbito...")
-
-    df["FAIXA_IDADE"] = pd.cut(
-        df["NU_IDADE_N"],
-        bins=[0, 10, 20, 40, 60, 80, 120]
-    )
-
-    tabela = pd.crosstab(df["FAIXA_IDADE"], df["EVOLUCAO"])
-
-    plt.figure()
-    plt.imshow(tabela, aspect='auto')
-    plt.colorbar()
-
-    plt.yticks(range(len(tabela.index)), tabela.index)
-    plt.xticks(range(len(tabela.columns)), tabela.columns)
-
-    plt.title("Heatmap: Idade vs Evolução")
-    plt.show()
-
-
-def grafico_colorido_estado(df):
-    contagem = df["SG_UF"].value_counts()
-
-    cores = plt.cm.viridis(np.linspace(0, 1, len(contagem)))
-
-    plt.figure()
-    contagem.plot(kind="bar", color=cores)
-
-    plt.title("Casos por Estado (Colorido)")
-    plt.xlabel("Estado")
-    plt.ylabel("Casos")
-    plt.show()
-
-
-def scatter_idade_tempo(df):
-    print("Scatter idade x tempo...")
-
-    plt.figure()
-
-    plt.scatter(
-        df["DT_NOTIFIC"],
-        df["NU_IDADE_N"],
-        alpha=0.3
-    )
-
-    plt.title("Idade ao longo do tempo")
-    plt.xlabel("Data")
-    plt.ylabel("Idade")
-    plt.show()
-
-
-def boxplot_idade(df):
-    print("Boxplot idade por desfecho...")
-
-    df.boxplot(column="NU_IDADE_N", by="EVOLUCAO")
-
-    plt.title("Distribuição de idade por evolução")
-    plt.suptitle("")
-    plt.xlabel("Evolução")
-    plt.ylabel("Idade")
-    plt.show()
-
-
 def evolucao_media_movel(df):
-    print("Média móvel de casos...")
+    print("Calculando média móvel...")
+    if "DT_NOTIFIC" not in df.columns:
+        print("Coluna de data não encontrada.")
+        return
 
-    df["DATA"] = df["DT_NOTIFIC"]
-    serie = df.groupby("DATA").size()
-
+    df_temp = df.dropna(subset=["DT_NOTIFIC"]).copy()
+    serie = df_temp.groupby("DT_NOTIFIC").size()
+    
     media = serie.rolling(window=7).mean()
-
-    plt.figure()
+    
+    plt.figure(figsize=(10, 5))
     plt.plot(serie, alpha=0.4, label="Diário")
-    plt.plot(media, label="Média móvel 7 dias")
-
+    plt.plot(media, label="Média Móvel (7 dias)", color='red', linewidth=2)
+    
     plt.legend()
-    plt.title("Evolução com Média Móvel")
+    plt.title("Evolução com Média Móvel (Geral)")
     plt.show()
-
-
-# ========================
-# MINERAÇÃO DE DADOS
-# ========================
-
-def correlacao(df):
-    print("Calculando correlação...")
-
-    df_temp = df.copy()
-
-    df_temp["SEXO"] = df_temp["CS_SEXO"].map({"M": 0, "F": 1})
-
-    matriz = df_temp[["NU_IDADE_N", "SEXO", "EVOLUCAO"]].corr()
-
-    plt.figure()
-    plt.imshow(matriz)
-    plt.colorbar()
-
-    plt.xticks(range(len(matriz.columns)), matriz.columns)
-    plt.yticks(range(len(matriz.index)), matriz.index)
-
-    plt.title("Mapa de Correlação")
-    plt.show()
-
-    print("\nMatriz de correlação:")
-    print(matriz)
-
-
-def clusterizacao_simples(df):
-    print("Clusterização simples (manual)...")
-
-    df_cluster = df[["NU_IDADE_N", "EVOLUCAO"]].dropna()
-
-    # Criando clusters simples (heurística)
-    df_cluster["GRUPO_RISCO"] = pd.cut(
-        df_cluster["NU_IDADE_N"],
-        bins=[0, 20, 40, 60, 120],
-        labels=["Muito Baixo", "Baixo", "Médio", "Alto"]
-    )
-
-    print("\nDistribuição por grupo de risco:")
-    print(df_cluster["GRUPO_RISCO"].value_counts())
-
 
 # ========================
 # MAIN
 # ========================
-
 def main():
-    df = carregar_dados(ARQUIVO)
-    df = tratar_dados(df)
-
-    if df.empty:
-        print("Sem dados.")
+    print(f"Iniciando exploração offline.\nBuscando dados na pasta: {PASTA_DADOS}")
+    
+    # 1. Carrega os dados (Vai usar a memória otimizada do data_loader.py)
+    df_bruto = carregar_dados(PASTA_DADOS)
+    
+    if df_bruto.empty:
+        print("\nNenhum dado foi carregado. Verifique a pasta docs/database.")
         return
-
-    # Visualizações
-    grafico_colorido_estado(df)
-    heatmap_estado_mes(df)
-    heatmap_idade_obito(df)
-    scatter_idade_tempo(df)
-    boxplot_idade(df)
-    evolucao_media_movel(df)
-
-    # Mineração
-    correlacao(df)
-    clusterizacao_simples(df)
-
+        
+    # 2. Trata os dados
+    df = tratar_dados(df_bruto)
+    
+    print(f"\nDados carregados com sucesso! Total de registros na memória: {len(df)}")
+    
+    # 3. Gera as visualizações
+    if not df.empty:
+        print("Gerando gráficos...")
+        heatmap_estado_mes(df)
+        evolucao_media_movel(df)
+        
+    print("\nRotina finalizada.")
 
 if __name__ == "__main__":
     main()

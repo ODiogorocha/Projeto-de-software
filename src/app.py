@@ -2,50 +2,53 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import geopandas as gpd
+import os
 
 from data_loader import carregar_dados, tratar_dados, carregar_coordenadas, mesclar_coordenadas
-from model import treinar_modelo
-
-# ========================
-# CONFIGURAÇÃO
-# ========================
 from styles import carregar_estilos
 
+# ========================
+# CONFIGURAÇÕES DA PÁGINA
+# ========================
 st.set_page_config(layout="wide", page_title="Dashboard SRAG", page_icon="🦠")
 st.markdown(carregar_estilos(), unsafe_allow_html=True)
 
-# CSS global
 st.markdown("""
 <style>
-/* Esconde sidebar e header na página de apresentação */
 .hide-sidebar section[data-testid="stSidebar"] { display: none !important; }
 .hide-sidebar header[data-testid="stHeader"]   { display: none !important; }
-
-/* Métricas centralizadas */
 [data-testid="metric-container"] > div          { display:flex; flex-direction:column; align-items:center; text-align:center; }
 [data-testid="metric-container"] label          { font-size:0.85rem; color:rgba(255,255,255,0.6); letter-spacing:0.05em; text-transform:uppercase; }
 [data-testid="metric-container"] [data-testid="stMetricValue"] { font-size:2rem; font-weight:700; color:white; }
 </style>
 """, unsafe_allow_html=True)
 
-# ========================
-# SESSION STATE
-# ========================
-
 if "pagina" not in st.session_state:
     st.session_state.pagina = "inicio"
 
-# O seu arquivo original
-ARQUIVO = r"/home/diogo/Documentos/codigos/Projeto-de-software/docs/database/INFLUD19-23-03-2026.csv"
-MAPA = r"/home/diogo/Documentos/codigos/Projeto-de-software/src/brasil_estados.geojson"
+# Caminhos Dinâmicos
+# Caminhos Dinâmicos
+# Descobre a pasta onde o app.py está (a pasta src/)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(BASE_DIR)
 
-# 2. ADICIONE O CAMINHO DO SEU CSV DE MUNICÍPIOS AQUI:
-# (Troque pelo caminho real de onde você salvou o arquivo no seu computador)
-ARQUIVO_CIDADES = r"/home/diogo/Documentos/codigos/Projeto-de-software/docs/database/municipios.csv"
+# Pasta onde estão os dados da doença
+PASTA_DADOS = os.path.join(ROOT_DIR, "docs", "database")
 
-# ========================
-# PÁGINA DE APRESENTAÇÃO
-# ========================
+# Pasta onde está o arquivo de cidades (uma pasta antes)
+PASTA_DOCS = os.path.join(ROOT_DIR, "docs") 
+
+MAPA = os.path.join(BASE_DIR, "brasil_estados.geojson")
+ARQUIVO_ML = os.path.join(ROOT_DIR, "municipios_risco_doenca.csv")
+
+# Agora ele procura corretamente na pasta docs/
+cidade_parquet = os.path.join(PASTA_DOCS, "municipios.parquet")
+cidade_csv = os.path.join(PASTA_DOCS, "municipios.csv")
+
+if os.path.exists(cidade_parquet):
+    ARQUIVO_CIDADES = cidade_parquet
+else:
+    ARQUIVO_CIDADES = cidade_csv
 
 if st.session_state.pagina == "inicio":
 
@@ -250,41 +253,35 @@ if st.session_state.pagina == "inicio":
     st.stop()
 
 # ========================
-# DASHBOARD (páginas internas)
+# CACHE E CARREGAMENTO
 # ========================
-
-# ── Caminhos ─────────────────────────────────────────────────────────────
-ARQUIVO = r"/home/diogo/Documentos/codigos/Projeto-de-software/docs/database/INFLUD19-23-03-2026.csv"
-MAPA = r"/home/diogo/Documentos/codigos/Projeto-de-software/src/brasil_estados.geojson"
-ARQUIVO_CIDADES = r"/home/diogo/Documentos/codigos/Projeto-de-software/docs/database/municipios.csv"
-
-# ── Dados ─────────────────────────────────────────────────────────────────
 @st.cache_data
 def load_data():
-    df_bruto   = carregar_dados(ARQUIVO)
+    # Passamos a pasta mãe! O data loader procura os dados inteligentemente.
+    df_bruto   = carregar_dados(PASTA_DADOS)
     df_tratado = tratar_dados(df_bruto)
     df_coords  = carregar_coordenadas(ARQUIVO_CIDADES)
     return mesclar_coordenadas(df_tratado, df_coords)
 
 @st.cache_data
 def load_mapa():
-    return gpd.read_file(MAPA)
+    try:
+        return gpd.read_file(MAPA)
+    except:
+        return None
 
 df_total = load_data()
 df = df_total.copy()
 geo = load_mapa()
 
-def aplicar_estilo(fig, altura=500):
+def aplicar_estilo(fig, altura=450):
     fig.update_layout(
         paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-        font=dict(color="white", family="Arial"),
-        title=dict(x=0.02, xanchor="left", font=dict(size=22)),
-        margin=dict(t=60, b=20, l=20, r=20), height=altura,
+        font=dict(color="white", family="Arial"), margin=dict(t=50, b=20, l=20, r=20), height=altura,
         xaxis=dict(showgrid=False, zeroline=False, color="white"),
         yaxis=dict(gridcolor="rgba(255,255,255,0.08)", zeroline=False, color="white")
     )
     return fig
-
 COR_PRINCIPAL = "Plasma"
 
 # ── Doenças ───────────────────────────────────────────────────────────────
@@ -405,7 +402,7 @@ st.divider()
 # ABAS
 # ========================
 
-tab1, tab2, tab3 = st.tabs(["Visão Geral", "Visão Geográfica", "Evolução Temporal"])
+tab1, tab2, tab3, tab4= st.tabs(["Visão Geral", "Visão Geográfica", "Evolução Temporal", "IA, provisorio"])
 
 # ── Aba 1 — Visão Geral ───────────────────────────────────────────────────
 with tab1:
@@ -553,19 +550,24 @@ with tab3:
         fig.update_traces(mode="lines+markers", line=dict(width=3))
         st.plotly_chart(aplicar_estilo(fig, 600), use_container_width=True)
 
-# ========================
-# MACHINE LEARNING (sidebar)
-# ========================
-
-st.sidebar.divider()
-st.sidebar.subheader("Machine Learning")
-st.sidebar.caption("Treine um modelo preditivo com os dados filtrados para estimar risco de óbito.")
-
-if st.sidebar.button("Treinar modelo", use_container_width=True,
-                     help="Pode levar alguns segundos dependendo do volume de dados."):
-    with st.spinner("Treinando modelo..."):
-        modelo = treinar_modelo(df_total)
-    if modelo:
-        st.sidebar.success("Modelo treinado com sucesso!")
-    else:
-        st.sidebar.error("Erro ao treinar o modelo. Verifique os dados.")
+# Aba 4: Análise para Especialistas e IA
+with tab4:
+    st.subheader("Focos de Surto e Machine Learning")
+    colC, colD = st.columns(2)
+    
+    with colC:
+        if "DT_NOTIFIC" in df.columns and "SG_UF" in df.columns:
+            df_heat = df.copy()
+            df_heat["ANO_MES"] = pd.to_datetime(df_heat["DT_NOTIFIC"]).dt.to_period("M").astype(str)
+            tab_heat = pd.crosstab(df_heat["SG_UF"], df_heat["ANO_MES"])
+            fig_heat = px.imshow(tab_heat, aspect="auto", color_continuous_scale="Viridis", title="<b>Densidade: Focos por Estado</b>")
+            st.plotly_chart(aplicar_estilo(fig_heat), use_container_width=True)
+            
+    with colD:
+        if os.path.exists(ARQUIVO_ML):
+            df_ml = pd.read_csv(ARQUIVO_ML)
+            top_covid = df_ml.nlargest(10, 'prob_srag_covid').sort_values('prob_srag_covid')
+            fig_ml = px.bar(top_covid, x="prob_srag_covid", y="nome", orientation='h', title="<b>Ranking XGBoost: Risco de COVID Grave</b>", color="prob_srag_covid", color_continuous_scale="Reds")
+            st.plotly_chart(aplicar_estilo(fig_ml), use_container_width=True)
+        else:
+            st.info("Arquivo de ML não encontrado. Execute o modelo para gerar predições de risco.")
